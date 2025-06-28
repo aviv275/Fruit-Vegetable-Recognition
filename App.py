@@ -3,15 +3,34 @@ from PIL import Image
 import requests
 from bs4 import BeautifulSoup
 import numpy as np
-from keras.utils import load_img, img_to_array
-from keras.models import load_model
 import json
 import os
-import google.generativeai as genai
+
+# Try to import TensorFlow/Keras with error handling
+try:
+    from keras.utils import load_img, img_to_array
+    from keras.models import load_model
+    import google.generativeai as genai
+    TENSORFLOW_AVAILABLE = True
+except ImportError as e:
+    st.error(f"Error importing TensorFlow/Keras: {e}")
+    st.error("Please check your requirements.txt and ensure all dependencies are installed correctly.")
+    TENSORFLOW_AVAILABLE = False
+    st.stop()
 
 # Load the model
+if not TENSORFLOW_AVAILABLE:
+    st.error("TensorFlow/Keras not available. Cannot load model.")
+    st.stop()
+
 if os.path.exists('FV2.h5'):
-    model = load_model('FV2.h5')
+    try:
+        model = load_model('FV2.h5')
+        st.success("✅ Model loaded successfully!")
+    except Exception as e:
+        st.error(f"Error loading model: {e}")
+        st.error("Please ensure the model file is compatible with the current TensorFlow version.")
+        st.stop()
 else:
     st.error("Model file 'FV2.h5' not found. Please run the training script first.")
     st.stop()
