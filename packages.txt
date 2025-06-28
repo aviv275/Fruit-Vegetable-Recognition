@@ -1,4 +1,0 @@
-# System dependencies for TensorFlow
-libgomp1
-libgcc-s1
-libstdc++6 
