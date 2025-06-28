@@ -1,5 +1,5 @@
 import streamlit as st
-from PIL import Image
+from PIL import Image, ImageDraw
 import numpy as np
 import json
 import os
@@ -12,51 +12,140 @@ st.set_page_config(
     layout="centered"
 )
 
-# Custom CSS for Morcadona branding
+# Custom CSS for Morcadona branding and card layout
 st.markdown("""
 <style>
-    .main-header {
-        color: #006830;
-        text-align: center;
-        font-size: 2.5rem;
-        font-weight: bold;
-        margin-bottom: 2rem;
-    }
-    
-    .stButton > button {
-        min-height: 60px;
-        font-size: 20px;
-        border-radius: 12px;
-        font-weight: bold;
-    }
-    
-    .primary-button {
-        background-color: #006830 !important;
-        color: white !important;
-        border: none !important;
-    }
-    
-    .secondary-button {
-        background-color: #FFB400 !important;
-        color: #006830 !important;
-        border: none !important;
-    }
-    
-    .metric-container {
-        background-color: #f8f9fa;
-        padding: 1rem;
-        border-radius: 12px;
-        border-left: 4px solid #006830;
-    }
-    
-    .weight-badge {
-        background-color: #006830;
-        color: white;
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-weight: bold;
-        font-size: 1.2rem;
-    }
+body {
+    background-color: #f7f6f3;
+}
+
+section.main > div {
+    background: #f7f6f3;
+}
+
+.morcadona-card {
+    background: #fff;
+    border-radius: 32px;
+    box-shadow: 0 4px 32px 0 rgba(0,0,0,0.07);
+    max-width: 420px;
+    margin: 48px auto 32px auto;
+    padding: 32px 32px 32px 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.main-header {
+    color: #006830;
+    text-align: center;
+    font-size: 2.7rem;
+    font-weight: 900;
+    letter-spacing: 0.01em;
+    margin-bottom: 1.5rem;
+    margin-top: 0.5rem;
+}
+
+.detected-label {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin-top: 1.2rem;
+    margin-bottom: 0.5rem;
+    text-align: left;
+    width: 100%;
+}
+
+.price-row {
+    font-size: 1.15rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.price-emoji {
+    font-size: 1.5rem;
+    margin-right: 0.3rem;
+}
+
+.price-arrow {
+    font-size: 1.3rem;
+    margin: 0 0.5rem;
+}
+
+.price-perkg {
+    color: #006830;
+    font-weight: 700;
+}
+
+.price-final {
+    color: #222;
+    font-weight: 700;
+}
+
+.confirm-btn button {
+    width: 100%;
+    background: #006830 !important;
+    color: #fff !important;
+    border-radius: 32px !important;
+    font-size: 1.35rem !important;
+    font-weight: 700 !important;
+    min-height: 64px !important;
+    margin-bottom: 0.7rem;
+    margin-top: 0.5rem;
+}
+
+.recipe-btn button {
+    width: 100%;
+    background: #FFB400 !important;
+    color: #006830 !important;
+    border-radius: 32px !important;
+    font-size: 1.1rem !important;
+    font-weight: 600 !important;
+    min-height: 56px !important;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.weight-badge {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: #006830;
+    color: #fff;
+    border-radius: 24px;
+    padding: 0.4rem 1.1rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    z-index: 10;
+    box-shadow: 0 2px 8px 0 rgba(0,0,0,0.07);
+}
+
+.image-container {
+    position: relative;
+    width: 320px;
+    height: 240px;
+    margin-bottom: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.stExpander {
+    width: 100% !important;
+    border-radius: 18px !important;
+    margin-top: 1.2rem !important;
+}
+
+/* Remove green outline (aura) from buttons */
+.stButton > button:focus, .stButton > button:active {
+    outline: none !important;
+    box-shadow: none !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -159,8 +248,7 @@ def get_recipes(item_name, gemini_model):
         return None
     
     try:
-        prompt = f"""Give me two easy Spanish recipes that use: {item_name}.
-Return each recipe as: title, ingredients list, instructions (≤100 words). No nutrition."""
+        prompt = f"""Give me two easy Spanish recipes that use: {item_name}.\nReturn each recipe as: title, ingredients list, instructions (≤100 words). No nutrition."""
         
         response = gemini_model.generate_content(prompt)
         return response.text
@@ -169,147 +257,64 @@ Return each recipe as: title, ingredients list, instructions (≤100 words). No 
         return None
 
 def main():
-    # Header
-    st.markdown('<h1 class="main-header">morcadona</h1>', unsafe_allow_html=True)
+    st.markdown('<div class="morcadona-card"><div class="main-header">Morcadona</div></div>', unsafe_allow_html=True)
     
-    # Initialize Gemini model
     gemini_model = None
-    
-    # Configure Gemini API from secrets
     if GEMINI_AVAILABLE:
         try:
-            # Try to get API key from secrets
             api_key = st.secrets.get("GEMINI_API_KEY")
             if api_key:
                 try:
-                    # Configure Gemini API
                     genai.configure(api_key=api_key)
-                    # Create model instance
                     gemini_model = genai.GenerativeModel('gemini-1.5-flash')
-                    st.success("✅ Gemini AI configured from secrets!")
-                except AttributeError:
-                    # Fallback for different API versions
-                    try:
-                        gemini_model = genai.GenerativeModel('gemini-1.5-flash', api_key=api_key)
-                        st.success("✅ Gemini AI configured from secrets!")
-                    except Exception as e:
-                        st.error(f"Error configuring Gemini: {e}")
-                        gemini_model = None
-                except Exception as e:
-                    st.error(f"Error configuring Gemini: {e}")
+                except Exception:
                     gemini_model = None
-            else:
-                # Fallback to sidebar input if not in secrets
-                with st.sidebar:
-                    st.header("🔑 API Configuration")
-                    api_key = st.text_input("Enter Gemini API Key", type="password", 
-                                           help="Get your API key from https://makersuite.google.com/app/apikey")
-                    if api_key:
-                        try:
-                            genai.configure(api_key=api_key)
-                            gemini_model = genai.GenerativeModel('gemini-1.5-flash')
-                            st.success("API key configured!")
-                        except Exception as e:
-                            st.error(f"Error configuring Gemini: {e}")
-                            gemini_model = None
-                    else:
-                        st.info("Enter API key to enable recipe features")
-        except Exception as e:
-            st.error(f"Error accessing secrets: {e}")
+        except Exception:
             gemini_model = None
-    else:
-        # Show warning in sidebar if Gemini not available
-        with st.sidebar:
-            st.header("🔑 API Configuration")
-            st.warning("Gemini library not available. Install with: pip install google-generativeai")
-    
-    # Load model and labels
+
     model = load_classification_model()
     labels = load_class_labels()
-    
     if model is None:
         st.warning("Model not available. Please ensure FV2.h5 is in the current directory.")
+        st.markdown('</div>', unsafe_allow_html=True)
         return
-    
-    # Image input section
-    st.markdown("### 📸 Place item on scale and capture image")
-    
-    # Try camera input first, fallback to file uploader
+
     camera_input = st.camera_input("Place item on scale and tap ⬆️")
-    
     if camera_input is None:
         file_input = st.file_uploader("Or upload an image", type=["jpg", "png", "jpeg"])
         img_input = file_input
     else:
         img_input = camera_input
-    
+
     if img_input is not None:
-        # Display image
-        img = Image.open(img_input).resize((400, 400))
-        
-        # Create container for image and weight badge
-        col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            st.image(img, use_container_width=True)
-        
-        with col2:
-            # Simulate weight reading
-            weight_g = get_weight()
-            st.markdown(f'<div class="weight-badge">{weight_g} g</div>', unsafe_allow_html=True)
-        
-        # Save image for processing
+        img = Image.open(img_input).resize((320, 240))
         os.makedirs('./upload_images', exist_ok=True)
         save_image_path = './upload_images/temp_image.jpg'
-        with open(save_image_path, "wb") as f:
-            f.write(img_input.getbuffer())
-        
-        # Predict item
+        img.save(save_image_path)
+        weight_g = get_weight()
+        st.markdown('<div class="image-container">', unsafe_allow_html=True)
+        st.image(img, use_container_width=False)
+        st.markdown(f'<div class="weight-badge">{weight_g} g</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
         predicted_item, confidence = predict_item(save_image_path, model, labels)
-        
         if predicted_item:
-            # Display results
-            st.markdown("---")
-            
-            # Item detection result
             confidence_pct = int(confidence * 100)
-            st.markdown(f"### Detected item: {predicted_item} {get_emoji(predicted_item)} {confidence_pct}%")
-            
-            # Pricing information
+            st.markdown(f'<div class="detected-label">Detected item: {predicted_item} {get_emoji(predicted_item)} {confidence_pct}%</div>', unsafe_allow_html=True)
             price_per_kg = get_price_per_kg(predicted_item)
             subtotal = (weight_g / 1000) * price_per_kg
-            
-            # Metrics display
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Weight", f"{weight_g} g")
-            with col2:
-                st.metric("Price", f"€{price_per_kg:.2f}/kg")
-            with col3:
-                st.metric("Subtotal", f"€{subtotal:.2f}")
-            
-            # Action buttons
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                if st.button("✅ Confirm", key="confirm", use_container_width=True):
-                    st.success(f"✅ {predicted_item} added to cart - €{subtotal:.2f}")
-            
-            with col2:
-                if st.button("🍽 Get a recipe", key="recipe", use_container_width=True):
-                    st.session_state.show_recipes = True
-            
-            # Recipe expander
+            emoji = get_emoji(predicted_item)
+            st.markdown(f'<div class="price-row"><span class="price-emoji">{emoji}</span>Price: <span class="price-perkg">€{price_per_kg:.2f}/kg</span> <span class="price-arrow">→</span> <span class="price-final">€{subtotal:.2f}</span></div>', unsafe_allow_html=True)
+            # Only show Get a recipe button, and do not change price/weight on click
+            recipe = st.button("🍽 Get a recipe", key="recipe", use_container_width=True, help="Get a Spanish recipe")
+            if recipe:
+                st.session_state.show_recipes = True
             if st.session_state.get('show_recipes', False):
                 with st.expander("🍽 Recipes", expanded=True):
                     if gemini_model:
                         with st.spinner("Getting Spanish recipes..."):
                             recipes = get_recipes(predicted_item, gemini_model)
-                        
                         if recipes:
                             st.markdown(recipes)
-                            
-                            # Download button
                             recipe_text = f"Spanish Recipes for {predicted_item}\n\n{recipes}"
                             st.download_button(
                                 label="📥 Download Recipes",
@@ -320,9 +325,10 @@ def main():
                         else:
                             st.warning("Could not fetch recipes. Please check your API key.")
                     else:
-                        st.info("Please configure Gemini API key in secrets.toml or sidebar to get recipes.")
+                        st.info("Please configure Gemini API key in secrets.toml to get recipes.")
         else:
             st.warning("Could not detect item. Please try again with a clearer image.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def get_emoji(item_name):
     """Get emoji for item"""
