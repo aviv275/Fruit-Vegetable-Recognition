@@ -7,6 +7,7 @@ from keras.utils import load_img, img_to_array
 from keras.models import load_model
 import json
 import os
+import google.generativeai as genai
 
 # Load the model
 if os.path.exists('FV2.h5'):
@@ -14,6 +15,15 @@ if os.path.exists('FV2.h5'):
 else:
     st.error("Model file 'FV2.h5' not found. Please run the training script first.")
     st.stop()
+
+# Configure Gemini API
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", None)
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    gemini_model = genai.GenerativeModel('gemini-2.5-flash-preview-04-17')
+else:
+    gemini_model = None
+    st.warning("Gemini API key not found. Some features will be limited.")
 
 # Load class indices
 if os.path.exists('class_indices.json'):
@@ -112,6 +122,51 @@ def fetch_calories(prediction):
             return "Calorie information not available"
 
 
+def get_gemini_info(prediction):
+    """Get detailed information about the predicted fruit/vegetable from Gemini"""
+    if gemini_model is None:
+        return None, None
+    
+    try:
+        # Get general information
+        info_prompt = f"""
+        Provide detailed information about {prediction} in the following format:
+        
+        **General Information:**
+        - Origin and history
+        - Nutritional benefits
+        - Health benefits
+        - Best season to consume
+        - How to select and store
+        
+        Keep it concise but informative (max 200 words).
+        """
+        
+        info_response = gemini_model.generate_content(info_prompt)
+        general_info = info_response.text
+        
+        # Get recipe recommendations
+        recipe_prompt = f"""
+        Provide 3 simple and delicious recipes using {prediction} as the main ingredient.
+        For each recipe, include:
+        - Recipe name
+        - Brief description
+        - Key ingredients (5-8 items)
+        - Simple cooking steps (3-5 steps)
+        
+        Format it nicely with clear sections.
+        """
+        
+        recipe_response = gemini_model.generate_content(recipe_prompt)
+        recipes = recipe_response.text
+        
+        return general_info, recipes
+        
+    except Exception as e:
+        st.error(f"Error getting Gemini information: {e}")
+        return None, None
+
+
 def prepare_image(img_path):
     if model is None:
         st.error("Model not loaded properly")
@@ -137,6 +192,20 @@ def prepare_image(img_path):
 
 def run():
     st.title("Fruits🍍-Vegetable🍅 Classification")
+    st.markdown("---")
+    
+    # Sidebar for API key input
+    with st.sidebar:
+        st.header("🔑 API Configuration")
+        if not GEMINI_API_KEY:
+            api_key = st.text_input("Enter Gemini API Key", type="password", 
+                                   help="Get your API key from https://makersuite.google.com/app/apikey")
+            if api_key:
+                genai.configure(api_key=api_key)
+                global gemini_model
+                gemini_model = genai.GenerativeModel('gemini-2.5-flash-preview-04-17')
+                st.success("API key configured!")
+        
     img_file = st.file_uploader("Choose an Image", type=["jpg", "png", "jpeg"])
     if img_file is not None:
         img = Image.open(img_file).resize((250, 250))
@@ -152,14 +221,52 @@ def run():
                 st.error("Failed to predict the image")
                 return
                 
-            if result in vegetables:
-                st.info('**Category : Vegetables**')
-            else:
-                st.info('**Category : Fruit**')
-            st.success("**Predicted : " + result + '**')
+            # Display basic results
+            col1, col2 = st.columns(2)
+            with col1:
+                if result in vegetables:
+                    st.info('**Category : Vegetables**')
+                else:
+                    st.info('**Category : Fruit**')
+            
+            with col2:
+                st.success("**Predicted : " + result + '**')
+            
+            # Display calorie information
             cal = fetch_calories(result)
             if cal:
                 st.warning('**' + cal + '(100 grams)**')
+            
+            st.markdown("---")
+            
+            # Gemini Integration
+            if gemini_model:
+                st.header("🤖 AI-Powered Information")
+                
+                with st.spinner("Getting detailed information from AI..."):
+                    general_info, recipes = get_gemini_info(result)
+                
+                if general_info and recipes:
+                    # Display general information
+                    st.subheader("📚 General Information")
+                    st.markdown(general_info)
+                    
+                    st.markdown("---")
+                    
+                    # Display recipes
+                    st.subheader("👨‍🍳 Recipe Recommendations")
+                    st.markdown(recipes)
+                    
+                    # Download button for recipes
+                    recipe_text = f"Recipes for {result}\n\n{recipes}"
+                    st.download_button(
+                        label="📥 Download Recipes",
+                        data=recipe_text,
+                        file_name=f"{result}_recipes.txt",
+                        mime="text/plain"
+                    )
+            else:
+                st.info("💡 Enable Gemini AI in the sidebar to get detailed information and recipe recommendations!")
 
 
 run()
