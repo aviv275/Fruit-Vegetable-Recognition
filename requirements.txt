@@ -1,8 +1,11 @@
 requests==2.29.0
 beautifulsoup4
 streamlit
-numpy
+numpy>=1.26.0
+pandas>=2.2.0
 Pillow
 flask
-keras==2.15.0
-tensorflow==2.15.0
+tensorflow>=2.15.0
+keras>=2.15.0
+matplotlib
+pathlib

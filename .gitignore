@@ -37,6 +37,12 @@ wheels/
 # macOS
 .DS_Store
 
+# Dataset directories (large image files)
+input/
+input/train/
+input/test/
+input/validation/
+
 # Uploaded images (temporary files)
 upload_images/*.jpg
 upload_images/*.png
